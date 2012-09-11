@@ -3,33 +3,35 @@
 use 5.010;
 use strict;
 use warnings;
-
 use FindBin '$Bin';
 use lib $Bin, "$Bin/t";
 
-use File::Slurp;
-use File::Temp qw(tempfile);
-use Test::More 0.96;
-require "testlib.pl";
+use Text::Fragment qw(insert_fragment delete_fragment);
+use Test::More 0.98;
 
-setup();
-
-my ($fh, $f) = tempfile();
-
-test_setup_snippet_with_id(
+test_insert_fragment(
     name          => "insert one-line/shell",
-    prepare       => sub { write_file($f, "1\n2\n3\n") },
-    args          => {file=>$f, id=>"id1", content=>"x"},
-    check_unsetup => {content => "1\n2\n3\n"},
-    check_setup   => {content => "1\n2\n3\nx # SNIPPET id=id1\n"},
+    args          => {text=>"1\n2\n3\n", id=>"id1", payload=>"x"},
+    status        => 200,
+    text          => "1\n2\n3\nx # FRAGMENT id=id1\n",
+    orig_payload  => undef,
 );
-test_setup_snippet_with_id(
-    name          => "insert one-line/cpp, autoappend newline",
-    prepare       => sub { write_file($f, "1\n2\n3\n") },
-    args          => {file=>$f, id=>"id1", content=>"x", comment_style=>"cpp"},
-    check_unsetup => {content => "1\n2\n3\n"},
-    check_setup   => {content => "1\n2\n3\nx // SNIPPET id=id1\n"},
+test_insert_fragment(
+    name          => "insert one-line/shell, no ending newline",
+    args          => {text=>"1\n2\n3", id=>"id1", payload=>"x"},
+    status        => 200,
+    text          => "1\n2\n3\nx # FRAGMENT id=id1",
+    orig_payload  => undef,
 );
+test_insert_fragment(
+    name          => "insert one-line/shell, noop",
+    args          => {text=>"1\n2\n3\nx # FRAGMENT id=id1",
+                      id=>"id1", payload=>"x"},
+    status        => 304,
+);
+
+# XXX test remove orig no ending newline -> restored with no ending nl
+
 test_setup_snippet_with_id(
     name          => "insert multiline/shell, autoappend newline",
     prepare       => sub { write_file($f, "1\n2\n3") },
@@ -168,7 +170,11 @@ test_setup_snippet_with_id(
                               "# END SNIPPET id=i\n3\n"},
 );
 
-# XXX test: label (coderef)
-
 DONE_TESTING:
-teardown();
+done_testing;
+
+sub test_insert_fragment {
+}
+
+sub test_delete_fragment {
+}

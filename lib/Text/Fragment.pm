@@ -78,7 +78,7 @@ sub _label {
         one_line_pattern   => $ore,
         multi_line_pattern => $mre,
         parse_attrs        => sub {
-            my $s = shift;
+            my $s = shift // "";
             my %a;
             for my $a (split /\s+/, $s) {
                 my ($n, $v) = split /=/, $a, 2;
@@ -157,8 +157,10 @@ sub _doit {
     }
 
     if ($which eq 'list') {
+
         my @ff;
-        while ($text =~ /((?:$one_line_pattern | $multi_line_pattern)\R?)/xg) {
+        while ($text =~ /((?: $one_line_pattern | $multi_line_pattern)
+                             (?:\R|\z)?)/xg) {
             push @ff, {
                 raw     => $1,
                 id      => $+{id},
@@ -167,8 +169,11 @@ sub _doit {
             };
         }
         return [200, "OK", \@ff];
+
     } elsif ($which eq 'get') {
-        if ($text =~ /((?:$one_line_pattern | $multi_line_pattern)\R?)/x) {
+
+        if ($text =~ /((?:$one_line_pattern | $multi_line_pattern)
+                          (?:\R|\z)?)/x) {
             return [200, "OK", {
                 raw     => $1,
                 id      => $+{id},
@@ -178,7 +183,9 @@ sub _doit {
         } else {
             return [404, "Fragment with that ID not found"];
         }
+
     } elsif ($which eq 'set_attrs') {
+
         my $orig_attrs;
         my $sub = sub {
             my %f = @_;
@@ -196,7 +203,8 @@ sub _doit {
             use Data::Dump; dd \%a;
             $format_fragment->(%f);
         };
-        if ($text =~ s{((?:$one_line_pattern | $multi_line_pattern)\R?)}
+        if ($text =~ s{((?:$one_line_pattern | $multi_line_pattern)
+                           (?:\R|\z)?}
                       {$sub->(%+)}egx) {
             return [200, "OK", {text=>$text, orig_attrs=>$orig_attrs}];
         } else {
@@ -204,9 +212,39 @@ sub _doit {
         }
 
     } elsif ($which eq 'delete') {
-        $text =~ s///;
-    }
 
+        my %f;
+        my $sub = sub {
+            %f = @_;
+            if ($f{is_multi}) {
+                if (!$f{bnl}) {
+                    return "";
+                } elsif ($f{enl}) {
+                    return "\n";
+                } else {
+                    return "";
+                }
+            } else {
+                if ($f{enl}) {
+                    return "\n";
+                } else {
+                    return "";
+                }
+            }
+        };
+        if ($text =~ s{(?<bnl>\R?)
+                       (?<fragment>$one_line_pattern | $multi_line_pattern)
+                       (?<enl>\R|\z)}
+                      {$sub->(%+)}egx) {
+            return [200, "OK", {text=>$text,
+                                orig_fragment=>$f{fragment} . ($f{enl}//""),
+                                orig_payload=>$f{payload}}];
+        } else {
+            return [304, "Fragment with that ID already does not exist"];
+        }
+
+    } else { # insert
+    }
 }
 
 $SPEC{':package'} = {

@@ -50,5 +50,17 @@ _
     );
 };
 
+subtest "no enl, single-line, ini-style" => sub {
+    is_deeply(
+        get_fragment(text=>"1;FRAGMENT id=i", id=>"i", comment_style=>"ini"),
+        [200, "OK", {
+            raw     => "1;FRAGMENT id=i",
+            id      => "i",
+            attrs   => {id=>"i"},
+            payload => "1",
+        }]
+    );
+};
+
 DONE_TESTING:
 done_testing;

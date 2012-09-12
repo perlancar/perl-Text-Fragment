@@ -9,7 +9,13 @@ use Data::Clone;
 
 require Exporter;
 our @ISA       = qw(Exporter);
-our @EXPORT_OK = qw(insert_fragment delete_fragment);
+our @EXPORT_OK = qw(
+                       list_fragments
+                       get_fragment
+                       set_fragment_attrs
+                       insert_fragment
+                       delete_fragment
+               );
 
 # VERSION
 
@@ -18,16 +24,26 @@ our %SPEC;
 sub _label {
     my %args  = @_;
     my $id            = $args{id} // "";
-    my $label         = $args{label};
+    my $label         = $args{label}; # str
     my $comment_style = $args{comment_style};
     my $attrs         = $args{attrs} // {};
     for (keys %$attrs) {
         /\A\w+\z/ or die "Invalid attribute name '$_', please use ".
             "letters/numbers only";
-        $_ eq 'id' and die "Invalid attribute name '$_', reserved'";
+        # id is mentioned in 'id' arg, not in 'attrs'. let's be rather blunt
+        # about this and delete 'id' key in 'attrs'.
+        $_ eq 'id' and delete $attrs->{$_};
     }
 
-    my $attrs_re = qr/(?:\w+=\S+\s+)*id=\Q$id\E(?:\s+\w+=\S+)*/;
+    my $a_re;  # regex to match attributes
+    my $ai_re; # also match attributes, but attribute id must be present
+    if (length $id) {
+        $ai_re = qr/(?:\w+=\S*\s+)*id=(?<id>\Q$id\E)(?:\s+\w+=\S+)*/;
+    } else {
+        $ai_re = qr/(?:\w+=\S*\s+)*id=(?<id>\S*)(?:\s+\w+=\S+)*/;
+    }
+    $a_re  = qr/(?:\w+=\S*)?(?:\s+\w+=\S*)*/;
+
     my ($ts, $te); # tag start and end
     if ($comment_style eq 'shell') {
         $ts = "#";
@@ -48,12 +64,24 @@ sub _label {
         die "BUG: unknown comment_style $comment_style";
     }
     # regex to detect fragment
-    my $ore = qr!^(.*?)\s*
-                 \Q$ts\E\s*\Q$label\E\s+$attrs_re\s*\Q$te\E\s*(?:\R??|\z)!mx;
-    my $mre = qr!^\Q$ts\E\s*BEGIN\s+\Q$label\E\s+$attrs_re\s*\Q$te\E\s*\R
-                 (.*?)
-                 ^\Q$ts\E\s*END  \s+\Q$label\E\s+$attrs_re\s*\Q$te\E
-                 \s*(?:\R??|\z)!msx;
+    my $ore = qr!^(?<payload>.*?)[ \t]*\Q$ts\E[ \t]*
+                 \Q$label\E[ \t]+
+                 (?<attrs>$ai_re)[ \t]*
+                 \Q$te\E[ \t]*(?:\R??|\z)!mx;
+    my $mre = qr!^\Q$ts\E[ \t]*
+                 BEGIN[ \t]+\Q$label\E[ \t]+
+                 (?<attrs>$ai_re)[ \t]*
+                 \Q$te\E[ \t]*\R
+                 (?:
+                     (?<payload>.*)
+                     ^\Q$ts\E[ \t]*END[ \t]+\Q$label\E[ \t]+
+                       (?:\w+=\S*\s+)*id=\g{id}(?:\s+\w+=\S+)*
+                       [ \t]*\Q$te\E |
+                     (?<payload>.*?) # without any ID at the ending comment
+                     ^\Q$ts\E[ \t]*END[ \t]+\Q$label\E(?:[ \t]+$a_re)?[ \t]*
+                       \Q$te\E |
+                 )
+                 [ \t]*(?:\R??|\z)!msx;
 
     return {
         one_line_comment   => " $ts $label id=$id" . ($te ? " $te":""),
@@ -61,52 +89,95 @@ sub _label {
         end_comment        => "$ts END $label id=$id" . ($te ? " $te":""),
         one_line_pattern   => $ore,
         multi_line_pattern => $mre,
+        parse_attrs        => sub {
+            my $s = shift;
+            my %a;
+            for my $a (split /\s+/, $s) {
+                my ($n, $v) = split /=/, $a, 2;
+                $a{$n} = $v;
+            }
+            \%a;
+        },
     };
 }
 
-sub _insert_or_delete_fragment {
+sub _doit {
     my ($which, %args) = @_;
 
-    die "BUG: which must be 'insert' or 'delete"
-        unless $which eq 'insert' || $which eq 'delete';
-    my ($label, $label_sub);
+    die "BUG: invalid which"
+        unless $which =~ /\A(?:list|get|insert|delete|set_attrs)\z/;
+    my ($label_str, $label_sub);
     if (ref($args{label}) eq 'CODE') {
-        $label = "FRAGMENT";
+        $label_str = "FRAGMENT";
         $label_sub = $args{label};
     } else {
-        $label = $args{label} // "FRAGMENT";
+        $label_str = $args{label} || "FRAGMENT";
         $label_sub = \&_label;
     }
 
     my $text               = $args{text};
     defined($text) or return [400, "Please specify text"];
     my $id                 = $args{id};
-    defined($id) or return [400, "Please specify id"];
-    $id =~ /\A\w+\z/ or return [400, "Invalid id, please use ".
-                                    "letters/numbers only"];
+    if ($which =~ /\A(?:get|insert|set_attrs|delete)\z/) {
+        defined($id) or return [400, "Please specify id"];
+    }
+    if (defined $id) {
+        $id =~ /\A\w+\z/ or return [400, "Invalid id, please use ".
+                                        "letters/numbers only"];
+    }
     my $good_pattern       = $args{good_pattern};
     my $replace_pattern    = $args{replace_pattern};
     my $top_style          = $args{top_style};
     my $comment_style      = $args{comment_style} // "shell";
-    my $res                = $label_sub->(id=>$id, label=>$label,
+    my $res                = $label_sub->(id=>$id, label=>$label_str,
                                           comment_style=>$comment_style);
     my $one_line_comment   = $res->{one_line_comment};
     my $begin_comment      = $res->{begin_comment};
     my $end_comment        = $res->{end_comment};
     my $one_line_pattern   = $res->{one_line_pattern};
     my $multi_line_pattern = $res->{multi_line_pattern};
+    my $parse_attrs        = $res->{parse_attrs};
     my $des_pl             = $args{payload}; # desired payload
     if ($which eq 'insert') {
         defined($des_pl) or return [400, "Please specify payload"];
     }
 
-    my $is_multi           = $des_pl =~ /\R/;
+    my $is_multi           = defined($des_pl) && $des_pl =~ /\R/;
     if ($is_multi) {
         # autoappend newline
         $des_pl =~ s/\R\z//; $des_pl .= "\n";
     } else {
         # autotrim one-line
-        $des_pl =~ s/\s+\z//;
+        $des_pl =~ s/\s+\z// if defined($des_pl);
+    }
+
+    if ($which eq 'list') {
+        my @ff;
+        while ($text =~ /((?:$one_line_pattern | $multi_line_pattern)\R?)/xg) {
+            push @ff, {
+                raw     => $1,
+                id      => $+{id},
+                payload => $+{payload},
+                attrs   => $parse_attrs->($+{attrs}),
+            };
+        }
+        #while ($text =~ /($one_line_pattern\R?)/g) {
+        #    push @ff, {
+        #        raw     => $1,
+        #        id      => $+{id},
+        #        payload => $+{payload},
+        #        attrs   => $parse_attrs->($+{attrs}),
+        #    };
+        #}
+        #while ($text =~ /($multi_line_pattern\R?)/g) {
+        #    push @ff, {
+        #        raw     => $1,
+        #        id      => $+{id},
+        #        payload => $+{payload},
+        #        attrs   => $parse_attrs->($+{attrs}),
+        #    };
+        #}
+        return [200, "OK", \@ff];
     }
 
     my $typ; # existing payload is 'oneline' or 'multi'
@@ -185,30 +256,53 @@ sub _insert_or_delete_fragment {
     }
 }
 
-$SPEC{insert_fragment} = {
-    summary => 'Insert a fragment of text to another text',
+$SPEC{':package'} = {
+    summary     => 'Manipulate fragments in text',
     description => <<'_',
 
-A fragment is a single line or a group of lines with an ID (and zero or more
-attributes) attached to it. The ID and attributes are encoded in the comment.
-Several types of comment styles are supported. Some examples of one-line
-fragments:
+A fragment is a single line or a group of lines (called payload) with a metadata
+encoded in the comment that is put adjacent to it (for a single line fragment)
+or enclosing it (for a multiline fragment). Fragments are usually used in
+configuration files or code. Here is the structure of a single-line fragment:
 
-    some text # FRAGMENT id=id1
-    RSYNC_ENABLE=1 /* FRAGMENT id=enable */
+    <payload> # <label> <attrs>
 
-An example of multi-line fragment (using cpp style comment instead of shell):
+Here is the structure of a multi-line fragment:
 
-    // BEGIN FRAGMENT id=id2
+    # BEGIN <label> <attrs>
+    <payload>
+    # END <label> [<attrs>]
+
+Label is by default `FRAGMENT` but can be other string. Attributes are a
+sequence of `name=val` separated by whitespace, where name must be alphanums
+only and val is zero or more non-whitespace characters. There must at least be
+an attribute with name `id`, it is used to identify fragment and allow the
+fragment to be easily replaced/modified/deleted from text. Attributes are
+optional in the ending comment.
+
+Comment character used is by default `#` (`shell`-style comment), but other
+comment styles are supported (see below).
+
+Examples of single-line fragments (the second example uses `c`-style comment and
+the third uses `cpp`-style comment):
+
+    RSYNC_ENABLE=1 # FRAGMENT id=enable
+    some text /* FRAGMENT id=id2 */
+    some text // FRAGMENT id=id3 foo=1 bar=2
+
+An example of multi-line fragment (using `html`-style comment instead of
+`shell`):
+
+    <!-- BEGIN FRAGMENT id=id4 -->
     some
     lines
     of
     text
-    // END FRAGMENT
+    <!-- END FRAGMENT id=id4 -->
 
-Another example:
+Another example (using `ini`-style comment):
 
-    ; BEGIN FRAGMENT id=default
+    ; BEGIN FRAGMENT id=default-settings
     register_globals=On
     extension=mysql.so
     extension=gd.so
@@ -217,12 +311,55 @@ Another example:
     upload_max_filesize=64M
     browscap=/c/share/php/browscap.ini
     allow_url_fopen=0
-    ; END FRAGMENT id=default
-
-Fragments are usually inserted into configuration files or code. They can be
-removed later because they have an identifier associated with it.
+    ; END FRAGMENT
 
 _
+};
+
+my $arg_comment_style = {
+    summary => 'Comment style',
+    schema  => ['str' => {
+        default => 'shell',
+        in      => [qw/c cpp html shell ini/],
+    }],
+};
+
+my $arg_label = {
+    schema  => [str => {default=>'FRAGMENT'}],
+    summary => 'Comment label',
+};
+
+$SPEC{list_fragments} = {
+    summary => 'List fragments in text',
+    args => {
+        text => {
+            summary => 'The text which contain fragments',
+            schema  => 'str*',
+            req     => 1,
+            pos     => 0,
+        },
+        comment_style => $arg_comment_style,
+        label => $arg_label,
+    },
+    result => {
+        summary => 'List of fragments',
+        schema  => 'array*',
+        description => <<'_',
+
+Will return status 200 if operation is successful. Result will be an array of
+fragments, where each fragment is a hash containing these keys: `raw` (string),
+`payload` (string), `attrs` (hash), `id` (string, can also be found in
+attributes).
+
+_
+    },
+};
+sub list_fragments {
+    _doit('list', @_);
+}
+
+$SPEC{insert_fragment} = {
+    summary => 'Insert or replace a fragment in text',
     args => {
         text => {
             summary => 'The text to insert fragment into',
@@ -274,88 +411,8 @@ _
                 'need not be inserted',
             schema  => 'str',
         },
-        comment_style => {
-            summary => 'Comment style',
-            schema  => ['str' => {
-                default => 'shell',
-                in      => [qw/c cpp html shell ini/],
-            }],
-            description => <<'_',
-
-Fragment is inserted along with comment which contains metainformation such as
-fragment ID and zero or more attributes.
-
-Example of shell-style (shell) comment:
-
-    ... # FRAGMENT id=...
-
-    # BEGIN FRAGMENT id=...
-    ...
-    # END FRAGMENT
-
-Example of C-style (c) comment:
-
-    ... /* FRAGMENT id=... */
-
-    /* BEGIN FRAGMENT id=... */
-    ...
-    /* END FRAGMENT id=... */
-
-Example of C++-style (cpp) comment:
-
-    ... // FRAGMENT id=...
-
-    // BEGIN FRAGMENT id=...
-    ...
-    // END FRAGMENT id=...
-
-Example of SGML-style (html) comment:
-
-    ... <!-- FRAGMENT id=... -->
-
-    <!-- BEGIN FRAGMENT id=... -->
-    ...
-    <!-- END FRAGMENT id=... -->
-
-Example of INI-style comment:
-
-    ... // FRAGMENT id=...
-
-    ; BEGIN FRAGMENT id=...
-    ...
-    ; END FRAGMENT id=...
-
-_
-        },
-        label => {
-            schema  => ['any' => {
-                of => ['str*', 'code*'],
-                default => 'FRAGMENT',
-            }],
-            summary => 'Comment label',
-            description => <<'_',
-
-If label is string (e.g. `Foo`), then one-line fragment comment will be:
-
- # Foo id=...
-
-and multi-line fragment comment:
-
- # BEGIN Foo id=...
- ...
- # END Foo id=...
-
-If label is a code, it will be called with named arguments: `id`,
-`comment_style`, `attrs` (a hash of attributes). It must return a hash with
-these keys: `one_line_comment` (string, the comment for one-line fragment),
-`begin_comment` (string, the beginning comment for multi-line fragment),
-`end_comment` (string, the closing comment for multi-line fragment),
-`one_line_pattern` (regex to match one-line fragment payload and extract it in
-$1), and `multi_line_pattern` (regex to match multi-line fragment content and
-extract it in $1).
-
-_
-        },
+        comment_style => $arg_comment_style,
+        label         => $arg_label,
     },
     result => {
         summary => 'A hash of result',
@@ -364,37 +421,87 @@ _
 
 Will return status 200 if operation is successful and text is changed. The
 result is a hash with the following keys: `text` will contain the new text,
-`orig_payload` will contain the original payload before being removed/replaced.
+`orig_payload` will contain the original payload before being removed/replaced,
+`orig_fragment` will contain the original fragment (or the text that matches
+`replace_pattern`).
 
-Will return status 304 if nothing is changed (for example, if fragment with the
-same payload needs to be inserted and has been; or when fragment needs to be
-deleted and already does not exist in the text).
+
+Will return status 304 if nothing is changed (i.e. if fragment with the
+same payload that needs to be inserted already exists in the text).
 
 _
     },
 };
 sub insert_fragment {
-    _insert_or_delete_fragment('insert', @_);
+    _doit('insert', @_);
 }
 
-$SPEC{delete_fragment} = clone($SPEC{insert_fragment});
-$SPEC{delete_fragment}{summary} = 'Delete fragment from text';
-$SPEC{delete_fragment}{description} = <<'_';
+$SPEC{delete_fragment} = {
+    summary => 'Delete fragment in text',
+    description => <<'_',
 
-See `insert_fragment` for more information on fragment.
+If there are multiple occurences of fragment (which is not considered a normal
+condition), only the first will be deleted.
 
 _
-delete $SPEC{delete_fragment}{args}{payload};
+    args => {
+        text => {
+            summary => 'The text to delete fragment from',
+            schema  => 'str*',
+            req     => 1,
+            pos     => 0,
+        },
+        id => {
+            summary => 'Fragment ID',
+            schema  => ['str*' => { match => qr/\A[\w-]+\z/ }],
+            req     => 1,
+            pos     => 1,
+        },
+        comment_style => {
+            summary => 'Comment style',
+            schema  => ['str' => {
+                default => 'shell',
+                in      => [qw/c cpp html shell ini/],
+            }],
+        },
+        label => {
+            schema  => ['any' => {
+                of => ['str*', 'code*'],
+                default => 'FRAGMENT',
+            }],
+            summary => 'Comment label',
+        },
+    },
+    result => {
+        summary => 'A hash of result',
+        schema  => 'hash*',
+        description => <<'_',
+
+Will return status 200 if operation is successful and text is deleted. The
+result is a hash with the following keys: `text` will contain the new text,
+`orig_payload` will contain the original fragment payload before being deleted,
+`orig_fragment` will contain the original fragment.
+
+Will return status 304 if nothing is changed (i.e. when the fragment that needs
+to be deleted already does not exist in the text).
+
+_
+    },
+};
 sub delete_fragment {
-    _insert_or_delete_fragment('delete', @_);
+    _doit('delete', @_);
 }
 
 1;
-# ABSTRACT: Insert/remove fragment in text
+# ABSTRACT: Manipulate fragments in text
 
 =head1 SYNOPSIS
 
- use Text::Fragment qw(insert_fragment remove_fragment);
+ use Text::Fragment qw(list_fragments
+                       get_fragment
+                       set_fragment_attrs
+                       insert_fragment
+                       delete_fragment);
 
  my $text = <<_;
  foo = "some value"
@@ -429,5 +536,17 @@ replaced:
 To delete a fragment:
 
  $res = delete_fragment(text=>$res->[2], id=>'bar');
+
+To list fragments:
+
+ $res = list_fragment(text=>$text);
+
+To get a fragment:
+
+ $res = get_fragment(text=>$text, id=>'bar');
+
+To set fragment attributes:
+
+ $res = se_fragment_attrs(text=>$text, id=>'bar', attrs=>{name=>'val', ...});
 
 =cut

@@ -6,20 +6,18 @@ use warnings;
 use FindBin '$Bin';
 use lib $Bin, "$Bin/t";
 
-use Text::Fragment qw(insert_fragment delete_fragment);
+use Text::Fragment qw(insert_fragment);
 use Test::More 0.98;
 
 test_insert_fragment(
     name          => "insert one-line/shell",
     args          => {text=>"1\n2\n3\n", id=>"id1", payload=>"x"},
-    status        => 200,
     text          => "1\n2\n3\nx # FRAGMENT id=id1\n",
     orig_payload  => undef,
 );
 test_insert_fragment(
     name          => "insert one-line/shell, no ending newline",
     args          => {text=>"1\n2\n3", id=>"id1", payload=>"x"},
-    status        => 200,
     text          => "1\n2\n3\nx # FRAGMENT id=id1",
     orig_payload  => undef,
 );
@@ -30,8 +28,42 @@ test_insert_fragment(
     status        => 304,
 );
 
-# XXX test remove orig no ending newline -> restored with no ending nl
+DONE_TESTING:
+done_testing;
 
+sub test_insert_fragment {
+    my %targs = @_;
+
+    subtest $targs{name} => sub {
+        my $res = insert_fragment(%{ $targs{args} });
+        my $status = $targs{status} // 200;
+        is($res->[0], $status, 'status');
+        return if $status != 200;
+        for (qw/text orig_payload orig_fragment/) {
+            if (defined $targs{$_}) {
+                is($res->[2]{$_}, $targs{$_}, $_);
+            }
+        }
+    };
+}
+
+sub test_delete_fragment {
+    my %targs = @_;
+
+    subtest $targs{name} => sub {
+        my $res = delete_fragment(%{ $targs{args} });
+        my $status = $targs{status} // 200;
+        is($res->[0], $status, 'status');
+        return if $status != 200;
+        for (qw/text orig_payload orig_fragment/) {
+            if (defined $targs{$_}) {
+                is($res->[2]{$_}, $targs{$_}, $_);
+            }
+        }
+    };
+}
+
+__END__
 test_setup_snippet_with_id(
     name          => "insert multiline/shell, autoappend newline",
     prepare       => sub { write_file($f, "1\n2\n3") },
@@ -170,11 +202,3 @@ test_setup_snippet_with_id(
                               "# END SNIPPET id=i\n3\n"},
 );
 
-DONE_TESTING:
-done_testing;
-
-sub test_insert_fragment {
-}
-
-sub test_delete_fragment {
-}

@@ -72,5 +72,27 @@ _
         ]]);
 };
 
+subtest "multi-word label, c-style comment" => sub {
+    my $text = <<'_';
+1
+2
+3 /* FRAGMENT id=id0 */
+4 /* SPANEL SECTION id=id-1 */
+5
+_
+
+    is_deeply(
+        list_fragments(text=>$text,
+                       comment_style=>"c", label=>"SPANEL SECTION"),
+        [200, "OK", [
+            {
+                raw     => "4 /* SPANEL SECTION id=id-1 */\n",
+                id      => "id-1",
+                attrs   => {id=>"id-1"},
+                payload => "4",
+            },
+        ]]);
+};
+
 DONE_TESTING:
 done_testing;

@@ -74,33 +74,44 @@ sub _label {
                  )
                  [ \t]*(?:\R??|\z)!msx;
 
+    my $parse_attrs = sub {
+        my $s = shift // "";
+        my %a;
+        for my $a (split /\s+/, $s) {
+            my ($n, $v) = split /=/, $a, 2;
+            $a{$n} = $v;
+        }
+        \%a;
+    };
+
     return {
         one_line_pattern   => $ore,
         multi_line_pattern => $mre,
-        parse_attrs        => sub {
-            my $s = shift // "";
-            my %a;
-            for my $a (split /\s+/, $s) {
-                my ($n, $v) = split /=/, $a, 2;
-                $a{$n} = $v;
-            }
-            \%a;
-        },
+        parse_attrs        => $parse_attrs,
         format_fragment    => sub {
             my %f = @_;
 
             # formatted attrs as string
             my $as = "";
-            for (sort keys %{ $f{attrs} }) {
-                $as .= " " . "$_=$f{attrs}{$_}";
+            if (ref($f{attrs})) {
+                for (sort keys %{ $f{attrs} }) {
+                    $as .= " " . "$_=$f{attrs}{$_}";
+                }
+            } else {
+                my $a = $parse_attrs->($f{attrs});
+                $as = join(" ", map {"$_=$a->{$_}"} grep {$_ ne 'id'}
+                    sort keys %$a);
             }
 
-            if ($f{is_multi} || $f{payload} =~ /\R/) {
+            my $pl = $f{payload};
+
+           if ($f{is_multi} || $pl =~ /\R/) {
+                $pl .= "\n" unless $pl =~ /\R\z/;
                 "$ts BEGIN $label id=$id$as" . ($te ? " $te":"") . "\n" .
-                $f{payload} . ($f{payload} =~ /\R\z/ ? "" : "\n").
+                $pl .
                "$ts END $label id=$id" . ($te ? " $te":"") . "\n";
             } else {
-                "$f{payload} $ts $label id=$id$as" . ($te ? " $te":"") . "\n";
+                "$pl $ts $label id=$id$as" . ($te ? " $te":"") . "\n";
             }
         },
     };
@@ -134,7 +145,13 @@ sub _doit {
     for (keys %$attrs) {
         /\A\w+\z/ or return [400, "Invalid attribute name '$_', please use ".
                                  "letters/numbers only"];
-        next unless defined($attrs->{$_});
+        if (!defined($attrs->{$_})) {
+            if ($which eq 'set_attrs') {
+                next;
+            } else {
+                return [400, "Undefined value for attribute name '$_'"];
+            }
+        }
         $attrs->{$_} =~ /\s/s and return
             [400,"Invalid value in attribute '$_', no whitespaces please"];
     }
@@ -151,9 +168,9 @@ sub _doit {
     my $multi_line_pattern = $res->{multi_line_pattern};
     my $parse_attrs        = $res->{parse_attrs};
     my $format_fragment    = $res->{format_fragment};
-    my $des_pl             = $args{payload}; # desired payload
+    my $payload            = $args{payload};
     if ($which eq 'insert') {
-        defined($des_pl) or return [400, "Please specify payload"];
+        defined($payload) or return [400, "Please specify payload"];
     }
 
     if ($which eq 'list') {
@@ -200,11 +217,10 @@ sub _doit {
                 }
             }
             $f{attrs} = \%a;
-            use Data::Dump; dd \%a;
             $format_fragment->(%f);
         };
         if ($text =~ s{((?:$one_line_pattern | $multi_line_pattern)
-                           (?:\R|\z)?}
+                           (?:\R|\z)?)}
                       {$sub->(%+)}egx) {
             return [200, "OK", {text=>$text, orig_attrs=>$orig_attrs}];
         } else {
@@ -244,7 +260,54 @@ sub _doit {
         }
 
     } else { # insert
+
+        my $replaced;
+        my %f;
+        my $sub = sub {
+            %f = @_;
+            return $f{fragment} if $payload eq $f{payload};
+            $replaced++;
+            $f{orig_fragment} = $f{fragment};
+            $f{orig_payload} = $f{payload};
+            $f{payload} = $payload;
+            $format_fragment->(%f);
+        };
+        if ($good_pattern && $text =~ /$good_pattern/) {
+            return [304, "Text contains good pattern"];
+        }
+
+        if ($text =~ s{(?<fragment>(?:$one_line_pattern | $multi_line_pattern)
+                           (?:\R|\z)?)}
+                      {$sub->(%+)}ex) {
+            if ($replaced) {
+                return [200, "Payload replaced", {
+                    text=>$text, orig_fragment=>$f{orig_fragment},
+                    orig_payload=>$f{orig_payload}}];
+            } else {
+                return [304, "Fragment with that ID already exist with ".
+                            "same content"];
+            }
+        }
+
+        my $fragment = $format_fragment->(payload=>$payload, attrs=>$attrs);
+        if ($replace_pattern && $text =~ /($replace_pattern)/) {
+            my $orig_fragment = $1;
+            $text =~ s/$replace_pattern/$fragment/;
+            return [200, "Replace pattern replaced", {
+                text=>$text, orig_fragment=>$orig_fragment}];
+        }
+
+        if ($top_style) {
+            $text = $fragment . $text;
+        } else {
+            my $enl = $text =~ /\R\z/; # text ends with newline
+            $fragment =~ s/\R\z//;
+            $text .= ($enl ? "" : "\n") . $fragment . ($enl ? "\n" : "");
+        }
+        return [200, "Fragment inserted at the ".
+                    ($top_style ? "top" : "bottom"), {text=>$text}];
     }
+
 }
 
 $SPEC{':package'} = {
@@ -487,6 +550,9 @@ _
         },
         comment_style => $arg_comment_style,
         label         => $arg_label,
+        attrs         => {
+            schema => [hash => {default=>{}}],
+        },
     },
     result => {
         summary => 'A hash of result',

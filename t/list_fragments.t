@@ -77,7 +77,11 @@ subtest "multi-word label, c-style comment" => sub {
 1
 2
 3 /* FRAGMENT id=id0 */
-4 /* SPANEL SECTION id=id-1 */
+/* BEGIN SPANEL SECTION id=id-1 */
+a
+b
+/* END SPANEL SECTION */
+4 /* SPANEL SECTION id=id-2 */
 5
 _
 
@@ -86,9 +90,112 @@ _
                        comment_style=>"c", label=>"SPANEL SECTION"),
         [200, "OK", [
             {
-                raw     => "4 /* SPANEL SECTION id=id-1 */\n",
+                raw     => "/* BEGIN SPANEL SECTION id=id-1 */\na\nb\n".
+                    "/* END SPANEL SECTION */\n",
                 id      => "id-1",
                 attrs   => {id=>"id-1"},
+                payload => "a\nb\n",
+            },
+            {
+                raw     => "4 /* SPANEL SECTION id=id-2 */\n",
+                id      => "id-2",
+                attrs   => {id=>"id-2"},
+                payload => "4",
+            },
+        ]]);
+};
+
+subtest "cpp-style comment" => sub {
+    my $text = <<'_';
+1
+2
+// BEGIN FRAGMENT id=id-1
+a
+b
+// END FRAGMENT
+4 // FRAGMENT id=id-2
+5
+_
+
+    is_deeply(
+        list_fragments(text=>$text,
+                       comment_style=>"cpp"),
+        [200, "OK", [
+            {
+                raw     => "// BEGIN FRAGMENT id=id-1\na\nb\n".
+                    "// END FRAGMENT\n",
+                id      => "id-1",
+                attrs   => {id=>"id-1"},
+                payload => "a\nb\n",
+            },
+            {
+                raw     => "4 // FRAGMENT id=id-2\n",
+                id      => "id-2",
+                attrs   => {id=>"id-2"},
+                payload => "4",
+            },
+        ]]);
+};
+
+subtest "ini-style comment" => sub {
+    my $text = <<'_';
+1
+2
+; BEGIN FRAGMENT id=id-1
+a
+b
+; END FRAGMENT
+4 ; FRAGMENT id=id-2
+5
+_
+
+    is_deeply(
+        list_fragments(text=>$text,
+                       comment_style=>"ini"),
+        [200, "OK", [
+            {
+                raw     => "; BEGIN FRAGMENT id=id-1\na\nb\n".
+                    "; END FRAGMENT\n",
+                id      => "id-1",
+                attrs   => {id=>"id-1"},
+                payload => "a\nb\n",
+            },
+            {
+                raw     => "4 ; FRAGMENT id=id-2\n",
+                id      => "id-2",
+                attrs   => {id=>"id-2"},
+                payload => "4",
+            },
+        ]]);
+};
+
+subtest "html-style comment" => sub {
+    my $text = <<'_';
+1
+2
+<!-- BEGIN FRAGMENT id=id-1 -->
+a
+b
+<!-- END FRAGMENT -->
+4 <!-- FRAGMENT id=id-2 -->
+5
+_
+
+    is_deeply(
+        list_fragments(text=>$text,
+                       comment_style=>"html"),
+        [200, "OK", [
+            {
+                raw     => "<!-- BEGIN FRAGMENT id=id-1 -->\na\nb\n".
+                    "<!-- END FRAGMENT -->\n",
+                id      => "id-1",
+                attrs   => {id=>"id-1"},
+                payload => "a\nb\n",
+            },
+            {
+                raw     => "4 <!-- FRAGMENT id=id-2 -->\n",
+                id      => "id-2",
+                attrs   => {id=>"id-2"},
                 payload => "4",
             },
         ]]);

@@ -311,6 +311,7 @@ sub _doit {
 }
 
 $SPEC{':package'} = {
+    v => 1.1,
     summary     => 'Manipulate fragments in text',
     description => <<'_',
 
@@ -396,6 +397,7 @@ my $arg_payload = {
 };
 
 $SPEC{list_fragments} = {
+    v => 1.1,
     summary => 'List fragments in text',
     args => {
         text          => {
@@ -425,6 +427,7 @@ sub list_fragments {
 }
 
 $SPEC{get_fragment} = {
+    v => 1.1,
     summary => 'Get fragment with a certain ID in text',
     description => <<'_',
 
@@ -461,6 +464,7 @@ sub get_fragment {
 }
 
 $SPEC{set_fragment_attrs} = {
+    v => 1.1,
     summary => 'Set/unset attributes of a fragment',
     description => <<'_',
 
@@ -506,6 +510,7 @@ sub set_fragment_attrs {
 }
 
 $SPEC{insert_fragment} = {
+    v => 1.1,
     summary => 'Insert or replace a fragment in text',
     args => {
         text      => {
@@ -577,6 +582,7 @@ sub insert_fragment {
 }
 
 $SPEC{delete_fragment} = {
+    v => 1.1,
     summary => 'Delete fragment in text',
     description => <<'_',
 

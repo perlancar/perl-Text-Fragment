@@ -162,6 +162,17 @@ sub _doit {
             };
         }
         return [200, "OK", \@ff];
+    } elsif ($which eq 'get') {
+        if ($text =~ /((?:$one_line_pattern | $multi_line_pattern)\R?)/x) {
+            return [200, "OK", {
+                raw     => $1,
+                id      => $+{id},
+                payload => $+{payload},
+                attrs   => $parse_attrs->($+{attrs}),
+            }];
+        } else {
+            return [404, "Fragment with that ID not found"];
+        }
     }
 
     my $typ; # existing payload is 'oneline' or 'multi'
@@ -313,17 +324,29 @@ my $arg_label = {
     summary => 'Comment label',
 };
 
+my $arg_id = {
+    summary => 'Fragment ID',
+    schema  => ['str*' => { match => qr/\A[\w-]+\z/ }],
+    req     => 1,
+};
+
+my $arg_payload = {
+    summary => 'Fragment content',
+    schema  => 'str*',
+    req     => 1,
+};
+
 $SPEC{list_fragments} = {
     summary => 'List fragments in text',
     args => {
-        text => {
+        text          => {
             summary => 'The text which contain fragments',
             schema  => 'str*',
             req     => 1,
             pos     => 0,
         },
         comment_style => $arg_comment_style,
-        label => $arg_label,
+        label         => $arg_label,
     },
     result => {
         summary => 'List of fragments',
@@ -342,27 +365,48 @@ sub list_fragments {
     _doit('list', @_);
 }
 
+$SPEC{get_fragment} = {
+    summary => 'Get fragment with a certain ID in text',
+    args => {
+        text          => {
+            summary => 'The text which contain fragments',
+            schema  => 'str*',
+            req     => 1,
+            pos     => 0,
+        },
+        comment_style => $arg_comment_style,
+        label         => $arg_label,
+        id            => $arg_id,
+    },
+    result => {
+        summary => 'Fragment',
+        schema  => 'array*',
+        description => <<'_',
+
+Will return status 200 if fragment is found. Result will be a hash with the
+following keys: `raw` (string), `payload` (string), `attrs` (hash), `id`
+(string, can also be found in attributes).
+
+Return 404 if fragment is not found.
+
+_
+    },
+};
+sub get_fragment {
+    _doit('get', @_);
+}
+
 $SPEC{insert_fragment} = {
     summary => 'Insert or replace a fragment in text',
     args => {
-        text => {
+        text      => {
             summary => 'The text to insert fragment into',
             schema  => 'str*',
             req     => 1,
             pos     => 0,
         },
-        id => {
-            summary => 'Fragment ID',
-            schema  => ['str*' => { match => qr/\A[\w-]+\z/ }],
-            req     => 1,
-            pos     => 1,
-        },
-        payload => {
-            summary => 'Fragment content',
-            schema  => 'str*',
-            req     => 1,
-            pos     => 2,
-        },
+        id        => $arg_id,
+        payload   => $arg_payload,
         top_style => {
             summary => 'Whether to append fragment at beginning of file '.
                 'instead of at the end',

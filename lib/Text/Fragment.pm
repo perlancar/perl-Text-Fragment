@@ -161,22 +161,6 @@ sub _doit {
                 attrs   => $parse_attrs->($+{attrs}),
             };
         }
-        #while ($text =~ /($one_line_pattern\R?)/g) {
-        #    push @ff, {
-        #        raw     => $1,
-        #        id      => $+{id},
-        #        payload => $+{payload},
-        #        attrs   => $parse_attrs->($+{attrs}),
-        #    };
-        #}
-        #while ($text =~ /($multi_line_pattern\R?)/g) {
-        #    push @ff, {
-        #        raw     => $1,
-        #        id      => $+{id},
-        #        payload => $+{payload},
-        #        attrs   => $parse_attrs->($+{attrs}),
-        #    };
-        #}
         return [200, "OK", \@ff];
     }
 

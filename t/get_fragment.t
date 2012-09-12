@@ -18,10 +18,8 @@ subtest "not found" => sub {
 5 # DIFFERENT_LABEL id=id2
 _
 
-    is_deeply(
-        get_fragment(text=>$text, id=>"id1"),
-        [404, "Fragment with that ID not found"]
-    );
+    my $res = get_fragment(text=>$text, id=>"id1");
+    is($res->[0], 404, "status");
 };
 
 subtest "get" => sub {

@@ -26,14 +26,7 @@ sub _label {
     my $id            = $args{id} // "";
     my $label         = $args{label}; # str
     my $comment_style = $args{comment_style};
-    my $attrs         = $args{attrs} // {};
-    for (keys %$attrs) {
-        /\A\w+\z/ or die "Invalid attribute name '$_', please use ".
-            "letters/numbers only";
-        # id is mentioned in 'id' arg, not in 'attrs'. let's be rather blunt
-        # about this and delete 'id' key in 'attrs'.
-        $_ eq 'id' and delete $attrs->{$_};
-    }
+    my $attrs         = $args{attrs};
 
     my $a_re;  # regex to match attributes
     my $ai_re; # also match attributes, but attribute id must be present
@@ -60,8 +53,6 @@ sub _label {
     } elsif ($comment_style eq 'ini') {
         $ts = ";";
         $te = "";
-    } else {
-        die "BUG: unknown comment_style $comment_style";
     }
     # regex to detect fragment
     my $ore = qr!^(?<payload>.*?)[ \t]*\Q$ts\E[ \t]*
@@ -71,7 +62,7 @@ sub _label {
     my $mre = qr!^\Q$ts\E[ \t]*
                  BEGIN[ \t]+\Q$label\E[ \t]+
                  (?<attrs>$ai_re)[ \t]*
-                 \Q$te\E[ \t]*\R
+                 \Q$te\E[ \t]*(?<is_multi>\R)
                  (?:
                      (?<payload>.*)
                      ^\Q$ts\E[ \t]*END[ \t]+\Q$label\E[ \t]+
@@ -79,14 +70,11 @@ sub _label {
                        [ \t]*\Q$te\E |
                      (?<payload>.*?) # without any ID at the ending comment
                      ^\Q$ts\E[ \t]*END[ \t]+\Q$label\E(?:[ \t]+$a_re)?[ \t]*
-                       \Q$te\E |
+                     \Q$te\E
                  )
                  [ \t]*(?:\R??|\z)!msx;
 
     return {
-        one_line_comment   => " $ts $label id=$id" . ($te ? " $te":""),
-        begin_comment      => "$ts BEGIN $label id=$id" . ($te ? " $te":""),
-        end_comment        => "$ts END $label id=$id" . ($te ? " $te":""),
         one_line_pattern   => $ore,
         multi_line_pattern => $mre,
         parse_attrs        => sub {
@@ -97,6 +85,23 @@ sub _label {
                 $a{$n} = $v;
             }
             \%a;
+        },
+        format_fragment    => sub {
+            my %f = @_;
+
+            # formatted attrs as string
+            my $as = "";
+            for (sort keys %{ $f{attrs} }) {
+                $as .= " " . "$_=$f{attrs}{$_}";
+            }
+
+            if ($f{is_multi} || $f{payload} =~ /\R/) {
+                "$ts BEGIN $label id=$id$as" . ($te ? " $te":"") . "\n" .
+                $f{payload} . ($f{payload} =~ /\R\z/ ? "" : "\n").
+               "$ts END $label id=$id" . ($te ? " $te":"") . "\n";
+            } else {
+                "$f{payload} $ts $label id=$id$as" . ($te ? " $te":"") . "\n";
+            }
         },
     };
 }
@@ -125,30 +130,30 @@ sub _doit {
         $id =~ /\A\w+\z/ or return [400, "Invalid id, please use ".
                                         "letters/numbers only"];
     }
+    my $attrs              = $args{attrs} // {};
+    for (keys %$attrs) {
+        /\A\w+\z/ or return [400, "Invalid attribute name '$_', please use ".
+                                 "letters/numbers only"];
+        next unless defined($attrs->{$_});
+        $attrs->{$_} =~ /\s/s and return
+            [400,"Invalid value in attribute '$_', no whitespaces please"];
+    }
+
     my $good_pattern       = $args{good_pattern};
     my $replace_pattern    = $args{replace_pattern};
     my $top_style          = $args{top_style};
     my $comment_style      = $args{comment_style} // "shell";
+    $comment_style =~ /\A(cpp|c|shell|html|ini)\z/ or return [
+        400, "Invalid comment_style, please use cpp/c/shell/html/ini"];
     my $res                = $label_sub->(id=>$id, label=>$label_str,
                                           comment_style=>$comment_style);
-    my $one_line_comment   = $res->{one_line_comment};
-    my $begin_comment      = $res->{begin_comment};
-    my $end_comment        = $res->{end_comment};
     my $one_line_pattern   = $res->{one_line_pattern};
     my $multi_line_pattern = $res->{multi_line_pattern};
     my $parse_attrs        = $res->{parse_attrs};
+    my $format_fragment    = $res->{format_fragment};
     my $des_pl             = $args{payload}; # desired payload
     if ($which eq 'insert') {
         defined($des_pl) or return [400, "Please specify payload"];
-    }
-
-    my $is_multi           = defined($des_pl) && $des_pl =~ /\R/;
-    if ($is_multi) {
-        # autoappend newline
-        $des_pl =~ s/\R\z//; $des_pl .= "\n";
-    } else {
-        # autotrim one-line
-        $des_pl =~ s/\s+\z// if defined($des_pl);
     }
 
     if ($which eq 'list') {
@@ -173,82 +178,35 @@ sub _doit {
         } else {
             return [404, "Fragment with that ID not found"];
         }
-    }
-
-    my $typ; # existing payload is 'oneline' or 'multi'
-    my $or_pl; # original payload before we remove/replace
-    my ($should_remove, $removed);
-    my ($should_insert, $inserted);
-    if ($text =~ /$one_line_pattern/ && ($typ = 'oneline') ||
-            $text =~ /$multi_line_pattern/ && ($typ = 'multi')) {
-        $or_pl = $1; # existing fragment's payload
-        if ($which eq 'insert' && $or_pl ne $des_pl) {
-            $log->tracef("fragment payload is >>>%s<<< ".
-                             "but needs to be >>>%s<<<",
-                         $or_pl, $des_pl);
-            $should_insert++;
-        } elsif ($which eq 'delete') {
-            $log->tracef("fragment exists when it should be removed");
-            $should_remove++;
-        } else {
-            return [304, "Nothing done, text already contains fragment"];
-        }
-    } else {
-        if ($which eq 'delete') {
-            return [304, "Nothing done, text already lacks fragment"];
-        } else {
-            if ($good_pattern && $text =~ /$good_pattern/) {
-                $log->tracef("text contains good_pattern %s, so we don't need ".
-                                 "to insert fragment", $good_pattern);
-            } else {
-                $log->tracef("fragment %s doesn't exist", $id);
-                $should_insert++;
+    } elsif ($which eq 'set_attrs') {
+        my $orig_attrs;
+        my $sub = sub {
+            my %f = @_;
+            $orig_attrs = $parse_attrs->($f{attrs});
+            my %a = %$orig_attrs; delete $a{id};
+            for my $k (keys %$attrs) {
+                my $v = $attrs->{$k};
+                if (defined $v) {
+                    $a{$k} = $v;
+                } else {
+                    delete $a{$k};
+                }
             }
+            $f{attrs} = \%a;
+            use Data::Dump; dd \%a;
+            $format_fragment->(%f);
+        };
+        if ($text =~ s{((?:$one_line_pattern | $multi_line_pattern)\R?)}
+                      {$sub->(%+)}egx) {
+            return [200, "OK", {text=>$text, orig_attrs=>$orig_attrs}];
+        } else {
+            return [404, "Fragment with that ID not found"];
         }
+
+    } elsif ($which eq 'delete') {
+        $text =~ s///;
     }
 
-    if ($should_remove) {
-        if ($typ eq 'oneline') {
-            $text =~ s!($one_line_pattern)!!;
-        } else {
-            $text =~ s!($multi_line_pattern)!!;
-        }
-        $removed++;
-    }
-
-    if ($should_insert) {
-        my $fragment;
-        if ($is_multi) {
-            $fragment = join(
-                "",
-                $begin_comment, "\n",
-                $des_pl,
-                $end_comment,
-            );
-        } else {
-            $fragment = $des_pl . $one_line_comment;
-        }
-        if ($replace_pattern && $text =~ /($replace_pattern)/) {
-            $or_pl = $1;
-            $text =~ s/$replace_pattern(\R?)/$fragment . $1/e;
-        } elsif ($text =~ /$one_line_pattern/) {
-            $text =~ s/$one_line_pattern(\R?)/$fragment . $1/;
-        } elsif ($text =~ /$multi_line_pattern(\R?)/) {
-            $text =~ s/$multi_line_pattern/$fragment . $1/;
-        } elsif ($top_style) {
-            $text = $fragment . "\n" . $text;
-        } else {
-            my $enl = $text =~ /\R\z/; # text ends with newline
-            $text .= ($enl ? "" : "\n") . $fragment . ($enl ? "\n" : "");
-        }
-        $inserted++;
-    }
-
-    if ($inserted || $removed) {
-        [200, "OK", {text=>$text, orig_payload=>$or_pl}];
-    } else {
-        return [304, "Nothing done"];
-    }
 }
 
 $SPEC{':package'} = {
@@ -367,6 +325,11 @@ sub list_fragments {
 
 $SPEC{get_fragment} = {
     summary => 'Get fragment with a certain ID in text',
+    description => <<'_',
+
+If there are multiple occurences of the fragment with the same ID ,
+
+_
     args => {
         text          => {
             summary => 'The text which contain fragments',
@@ -394,6 +357,51 @@ _
 };
 sub get_fragment {
     _doit('get', @_);
+}
+
+$SPEC{set_fragment_attrs} = {
+    summary => 'Set/unset attributes of a fragment',
+    description => <<'_',
+
+If there are multiple occurences of the fragment with the same ID ,
+
+_
+    args => {
+        text          => {
+            summary => 'The text which contain fragments',
+            schema  => 'str*',
+            req     => 1,
+            pos     => 0,
+        },
+        comment_style => $arg_comment_style,
+        label         => $arg_label,
+        id            => $arg_id,
+        attrs         => {
+            schema => 'hash*',
+            description => <<'_',
+
+To delete an attribute in the fragment, you can set the value to undef.
+
+_
+            req    => 1,
+        },
+    },
+    result => {
+        summary => 'New text and other data',
+        schema  => 'array*',
+        description => <<'_',
+
+Will return status 200 if fragment is found. Result will be a hash containing
+these keys: `text` (string, the modified text), `orig_attrs` (hash, the old
+attributes before being modified).
+
+Return 404 if fragment is not found.
+
+_
+    },
+};
+sub set_fragment_attrs {
+    _doit('set_attrs', @_);
 }
 
 $SPEC{insert_fragment} = {
@@ -468,8 +476,8 @@ $SPEC{delete_fragment} = {
     summary => 'Delete fragment in text',
     description => <<'_',
 
-If there are multiple occurences of fragment (which is not considered a normal
-condition), only the first will be deleted.
+If there are multiple occurences of fragment (which is considered an abnormal
+condition), all occurences will be deleted.
 
 _
     args => {
@@ -508,7 +516,9 @@ _
 Will return status 200 if operation is successful and text is deleted. The
 result is a hash with the following keys: `text` will contain the new text,
 `orig_payload` will contain the original fragment payload before being deleted,
-`orig_fragment` will contain the original fragment.
+`orig_fragment` will contain the original fragment. If there are multiple
+occurences (which is considered an abnormal condition), only the last deleted
+fragment will be returned in `orig_payload` and `orig_fragment`.
 
 Will return status 304 if nothing is changed (i.e. when the fragment that needs
 to be deleted already does not exist in the text).

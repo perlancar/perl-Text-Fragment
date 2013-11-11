@@ -2,5 +2,5 @@ Revision history for Text-Fragment
 
 0.01    2012-09-12 (SHARYANTO)
 
-        First release, extracted/renamed from Setup-Text-Snippet because
-        Text::Snippet was already taken.
+        - First release, extracted/renamed from Setup-Text-Snippet because
+          Text::Snippet was already taken.

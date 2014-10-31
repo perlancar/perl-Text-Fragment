@@ -27,8 +27,8 @@ test_insert_fragment(
     args          => {text=>"1\n2\n3\n", id=>"id1", payload=>"x"},
     text          => "1\n2\n3\nx # FRAGMENT id=id1\n",
 );
-test_insert_fragment(
-    name          => "insert one-line/shell, bug 0.01 (longer ID overwritten)",
+test_insert_fragment( # failed in 0.01
+    name          => "insert one-line/shell, longer ID doesn't get overwritten",
     args          => {text=>"foo-bar # FRAGMENT id=foo-bar", id=>"foo", payload=>"foo"},
     text          => "foo-bar # FRAGMENT id=foo-bar\nfoo # FRAGMENT id=foo",
 );
@@ -42,6 +42,11 @@ test_insert_fragment(
     name          => "insert one-line/shell, no ending newline",
     args          => {text=>"1\n2\n3", id=>"id1", payload=>"x"},
     text          => "1\n2\n3\nx # FRAGMENT id=id1",
+);
+test_insert_fragment( # failed in 0.02
+    name          => "insert one-line/shell, insert to empty string adds ending newline",
+    args          => {text=>"", id=>"foo", payload=>"foo"},
+    text          => "foo # FRAGMENT id=foo\n",
 );
 test_insert_fragment(
     name          => "insert one-line/c, top style",

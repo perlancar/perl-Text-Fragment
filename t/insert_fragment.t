@@ -15,6 +15,7 @@ test_insert_fragment(
                       id=>"id with space", payload=>"x"},
     status        => 400,
 );
+
 test_insert_fragment(
     name          => "insert one-line/shell, noop",
     args          => {text=>"1\n2\n3\nx # FRAGMENT id=id-1",
@@ -25,6 +26,11 @@ test_insert_fragment(
     name          => "insert one-line/shell",
     args          => {text=>"1\n2\n3\n", id=>"id1", payload=>"x"},
     text          => "1\n2\n3\nx # FRAGMENT id=id1\n",
+);
+test_insert_fragment(
+    name          => "insert one-line/shell, bug 0.01 (longer ID overwritten)",
+    args          => {text=>"foo-bar # FRAGMENT id=foo-bar", id=>"foo", payload=>"foo"},
+    text          => "foo-bar # FRAGMENT id=foo-bar\nfoo # FRAGMENT id=foo",
 );
 test_insert_fragment(
     name          => "insert one-line/shell, set attrs",

@@ -34,11 +34,11 @@ sub _label {
     my $a_re;  # regex to match attributes
     my $ai_re; # also match attributes, but attribute id must be present
     if (length $id) {
-        $ai_re = qr/(?:\w+=\S*\s+)*id=(?<id>\Q$id\E)(?:\s+\w+=\S+)*/;
+        $ai_re = qr/(?:\w+=\S*[ \t]+)*id=(?<id>\Q$id\E)(?:[ \t]+\w+=\S+)*/;
     } else {
-        $ai_re = qr/(?:\w+=\S*\s+)*id=(?<id>\S*)(?:\s+\w+=\S+)*/;
+        $ai_re = qr/(?:\w+=\S*[ \t]+)*id=(?<id>\S*)(?:[ \t]+\w+=\S+)*/;
     }
-    $a_re  = qr/(?:\w+=\S*)?(?:\s+\w+=\S*)*/;
+    $a_re  = qr/(?:\w+=\S*)?(?:[ \t]+\w+=\S*)*/;
 
     my ($ts, $te); # tag start and end
     if ($comment_style eq 'shell') {
@@ -61,7 +61,8 @@ sub _label {
     my $ore = qr!^(?<payload>.*?)[ \t]*\Q$ts\E[ \t]*
                  \Q$label\E[ \t]+
                  (?<attrs>$ai_re)[ \t]*
-                 \Q$te\E[ \t]*(?:\R??|\z)!mx;
+                 \Q$te\E[ \t]*(?<enl>\R|\z)!mx;
+
     my $mre = qr!^\Q$ts\E[ \t]*
                  BEGIN[ \t]+\Q$label\E[ \t]+
                  (?<attrs>$ai_re)[ \t]*
@@ -69,18 +70,18 @@ sub _label {
                  (?:
                      (?<payload>.*)
                      ^\Q$ts\E[ \t]*END[ \t]+\Q$label\E[ \t]+
-                       (?:\w+=\S*\s+)*id=\g{id}(?:\s+\w+=\S+)*
+                       (?:\w+=\S*[ \t]+)*id=\g{id}(?:[ \t]+\w+=\S+)*
                        [ \t]*\Q$te\E |
                      (?<payload>.*?) # without any ID at the ending comment
                      ^\Q$ts\E[ \t]*END[ \t]+\Q$label\E(?:[ \t]+$a_re)?[ \t]*
                      \Q$te\E
                  )
-                 [ \t]*(?:\R??|\z)!msx;
+                 [ \t]*(?<enl>\R|\z)!msx;
 
     my $parse_attrs = sub {
         my $s = shift // "";
         my %a;
-        for my $a (split /\s+/, $s) {
+        for my $a (split /[ \t]+/, $s) {
             my ($n, $v) = split /=/, $a, 2;
             $a{$n} = $v;
         }
@@ -108,11 +109,16 @@ sub _label {
 
             my $pl = $f{payload};
 
-           if ($f{is_multi} || $pl =~ /\R/) {
+            # to keep things simple here, regardless of whether the replaced
+            # pattern contains ending newline (enl), we still format with ending
+            # newline. then we'll just need to strip ending newline if it's not
+            # needed.
+
+            if ($f{is_multi} || $pl =~ /\R/) {
                 $pl .= "\n" unless $pl =~ /\R\z/;
                 "$ts BEGIN $label id=$id$as" . ($te ? " $te":"") . "\n" .
                 $pl .
-               "$ts END $label id=$id" . ($te ? " $te":"") . "\n";
+                "$ts END $label id=$id" . ($te ? " $te":"") . "\n";
             } else {
                 "$pl $ts $label id=$id$as" . ($te ? " $te":"") . "\n";
             }
@@ -179,8 +185,7 @@ sub _doit {
     if ($which eq 'list') {
 
         my @ff;
-        while ($text =~ /((?: $one_line_pattern | $multi_line_pattern)
-                             (?:\R|\z)?)/xg) {
+        while ($text =~ /($one_line_pattern|$multi_line_pattern)/xg) {
             push @ff, {
                 raw     => $1,
                 id      => $+{id},
@@ -192,8 +197,8 @@ sub _doit {
 
     } elsif ($which eq 'get') {
 
-        if ($text =~ /((?:$one_line_pattern | $multi_line_pattern)
-                          (?:\R|\z)?)/x) {
+        say $one_line_pattern;
+        if ($text =~ /($one_line_pattern|$multi_line_pattern)/x) {
             return [200, "OK", {
                 raw     => $1,
                 id      => $+{id},
@@ -222,8 +227,7 @@ sub _doit {
             $f{attrs} = \%a;
             $format_fragment->(%f);
         };
-        if ($text =~ s{((?:$one_line_pattern | $multi_line_pattern)
-                           (?:\R|\z)?)}
+        if ($text =~ s{$one_line_pattern | $multi_line_pattern}
                       {$sub->(%+)}egx) {
             return [200, "OK", {text=>$text, orig_attrs=>$orig_attrs}];
         } else {
@@ -235,28 +239,14 @@ sub _doit {
         my %f;
         my $sub = sub {
             %f = @_;
-            if ($f{is_multi}) {
-                if (!$f{bnl}) {
-                    return "";
-                } elsif ($f{enl}) {
-                    return "\n";
-                } else {
-                    return "";
-                }
-            } else {
-                if ($f{enl}) {
-                    return "\n";
-                } else {
-                    return "";
-                }
-            }
+            $f{enl} ? $f{bnl} : "";
         };
         if ($text =~ s{(?<bnl>\R?)
-                       (?<fragment>$one_line_pattern | $multi_line_pattern)
-                       (?<enl>\R|\z)}
+                       (?<fragment>$one_line_pattern | $multi_line_pattern)}
                       {$sub->(%+)}egx) {
+            use DD; dd \%f;
             return [200, "OK", {text=>$text,
-                                orig_fragment=>$f{fragment} . ($f{enl}//""),
+                                orig_fragment=>$f{fragment},
                                 orig_payload=>$f{payload}}];
         } else {
             return [304, "Fragment with that ID already does not exist"];
@@ -279,8 +269,7 @@ sub _doit {
             return [304, "Text contains good pattern"];
         }
 
-        if ($text =~ s{(?<fragment>(?:$one_line_pattern | $multi_line_pattern)
-                           (?:\R|\z)?)}
+        if ($text =~ s{(?<fragment>(?:$one_line_pattern | $multi_line_pattern))}
                       {$sub->(%+)}ex) {
             if ($replaced) {
                 return [200, "Payload replaced", {
@@ -304,8 +293,8 @@ sub _doit {
             $text = $fragment . $text;
         } else {
             my $enl = $text =~ /\R\z/; # text ends with newline
-            $fragment =~ s/\R\z//;
-            $text .= ($enl ? "" : "\n") . $fragment . ($enl ? "\n" : "");
+            $fragment =~ s/\R\z// unless $enl;
+            $text .= ($enl ? "" : "\n") . $fragment;
         }
         return [200, "Fragment inserted at the ".
                     ($top_style ? "top" : "bottom"), {text=>$text}];
@@ -381,7 +370,6 @@ my $arg_comment_style = {
         in      => [qw/c cpp html shell ini/],
     }],
 };
-
 my $arg_label = {
     schema  => [str => {default=>'FRAGMENT'}],
     summary => 'Comment label',
@@ -515,6 +503,13 @@ sub set_fragment_attrs {
 $SPEC{insert_fragment} = {
     v => 1.1,
     summary => 'Insert or replace a fragment in text',
+    description => <<'_',
+
+Newline insertion behaviour: if fragment is inserted at the bottom and text does
+not end with newline (which is considered bad style), the inserted fragment will
+also not end with newline.
+
+_
     args => {
         text      => {
             summary => 'The text to insert fragment into',
@@ -592,6 +587,10 @@ $SPEC{delete_fragment} = {
 If there are multiple occurences of fragment (which is considered an abnormal
 condition), all occurences will be deleted.
 
+Newline deletion behaviour: if fragment at the bottom of text does not end with
+newline (which is considered bad style), the text after the fragment is deleted
+will also not end with newline.
+
 _
     args => {
         text => {
@@ -606,13 +605,7 @@ _
             req     => 1,
             pos     => 1,
         },
-        comment_style => {
-            summary => 'Comment style',
-            schema  => ['str' => {
-                default => 'shell',
-                in      => [qw/c cpp html shell ini/],
-            }],
-        },
+        comment_style => $arg_comment_style,
         label => {
             schema  => ['any' => {
                 of => ['str*', 'code*'],

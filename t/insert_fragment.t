@@ -10,9 +10,15 @@ use Text::Fragment qw(insert_fragment);
 use Test::More 0.98;
 
 test_insert_fragment(
+    name          => "invalid syntax in ID -> fail",
+    args          => {text=>"",
+                      id=>"id with space", payload=>"x"},
+    status        => 400,
+);
+test_insert_fragment(
     name          => "insert one-line/shell, noop",
-    args          => {text=>"1\n2\n3\nx # FRAGMENT id=id1",
-                      id=>"id1", payload=>"x"},
+    args          => {text=>"1\n2\n3\nx # FRAGMENT id=id-1",
+                      id=>"id-1", payload=>"x"},
     status        => 304,
 );
 test_insert_fragment(

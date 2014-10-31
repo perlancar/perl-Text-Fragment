@@ -1,5 +1,8 @@
 package Text::Fragment;
 
+# DATE
+# VERSION
+
 use 5.010001;
 use strict;
 use warnings;
@@ -17,7 +20,7 @@ our @EXPORT_OK = qw(
                        delete_fragment
                );
 
-# VERSION
+our $re_id = qr/\A[A-Za-z0-9_.,:-]+\z/;
 
 our %SPEC;
 
@@ -138,8 +141,8 @@ sub _doit {
         defined($id) or return [400, "Please specify id"];
     }
     if (defined $id) {
-        $id =~ /\A\w+\z/ or return [400, "Invalid id, please use ".
-                                        "letters/numbers only"];
+        $id =~ $re_id or return [400, "Invalid syntax for id, please use ".
+                                     "letters/numbers/dots/dashes only"];
     }
     my $attrs              = $args{attrs} // {};
     for (keys %$attrs) {

@@ -1,5 +1,14 @@
 Revision history for Text-Fragment
 
+0.02    2014-10-31 (PERLANCAR)
+
+	- [Bugfix] fragment with longer ID e.g. foo-bar will match shorter
+	  ID (e.g. foo).
+
+	- Relax ID so it can contain dashes, underscores, dots, commas,
+	  colons (I happen to want to use program names as ID's).
+
+
 0.01    2012-09-12 (SHARYANTO)
 
         - First release, extracted/renamed from Setup-Text-Snippet because

@@ -244,7 +244,6 @@ sub _doit {
         if ($text =~ s{(?<bnl>\R?)
                        (?<fragment>$one_line_pattern | $multi_line_pattern)}
                       {$sub->(%+)}egx) {
-            use DD; dd \%f;
             return [200, "OK", {text=>$text,
                                 orig_fragment=>$f{fragment},
                                 orig_payload=>$f{payload}}];

@@ -1,5 +1,13 @@
 Revision history for Text-Fragment
 
+0.03    2014-10-31 (PERLANCAR)
+
+	- No functional changes.
+
+	- [Bugfix] Inserting at the bottom of empty string should add
+	  ending newline.
+
+
 0.02    2014-10-31 (PERLANCAR)
 
 	- [Bugfix] fragment with longer ID e.g. foo-bar will match shorter

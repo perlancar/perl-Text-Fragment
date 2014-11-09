@@ -197,7 +197,6 @@ sub _doit {
 
     } elsif ($which eq 'get') {
 
-        say $one_line_pattern;
         if ($text =~ /($one_line_pattern|$multi_line_pattern)/x) {
             return [200, "OK", {
                 raw     => $1,

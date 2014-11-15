@@ -86,9 +86,12 @@ _
     orig_fragment => "; BEGIN FRAGMENT id=id1\n2\n; END FRAGMENT\n",
     orig_payload  => "2\n",
 );
-
-# XXX test: replace doesn't replace existing attrs, use set_fragment_attrs() for
-# that
+test_insert_fragment(
+    name          => "replace doesn't replace attrs",
+    args          => {text=>"# FRAGMENT id=id1 b=2 a=1", id=>"id1",
+                      payload=>"x", attrs=>{b=>20, c=>30}},
+    text          => "x # FRAGMENT id=id1 a=1 b=2\n",
+);
 
 DONE_TESTING:
 done_testing;

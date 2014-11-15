@@ -103,7 +103,7 @@ sub _label {
                 }
             } else {
                 my $a = $parse_attrs->($f{attrs});
-                $as = join(" ", map {"$_=$a->{$_}"} grep {$_ ne 'id'}
+                $as = join("", map {" $_=$a->{$_}"} grep {$_ ne 'id'}
                     sort keys %$a);
             }
 

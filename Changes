@@ -1,5 +1,11 @@
 Revision history for Text-Fragment
 
+0.05    2014-11-16 (PERLANCAR)
+
+	- [Bugfix] Missed a space before attributes when replacing
+	  fragment.
+
+
 0.04    2014-11-09 (PERLANCAR)
 
 	- No functional changes.

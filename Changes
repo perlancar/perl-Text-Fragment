@@ -1,5 +1,13 @@
 Revision history for Text-Fragment
 
+0.06    2014-11-17 (PERLANCAR)
+
+	- No functional changes.
+
+	- Tweak error messages (include the missing/invalid ID/parameter
+	  name).
+
+
 0.05    2014-11-16 (PERLANCAR)
 
 	- [Bugfix] Missed a space before attributes when replacing

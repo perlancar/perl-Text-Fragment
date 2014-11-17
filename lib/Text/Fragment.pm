@@ -147,7 +147,7 @@ sub _doit {
         defined($id) or return [400, "Please specify id"];
     }
     if (defined $id) {
-        $id =~ $re_id or return [400, "Invalid syntax for id, please use ".
+        $id =~ $re_id or return [400, "Invalid ID syntax '$id', please use ".
                                      "letters/numbers/dots/dashes only"];
     }
     my $attrs              = $args{attrs} // {};
@@ -170,7 +170,8 @@ sub _doit {
     my $top_style          = $args{top_style};
     my $comment_style      = $args{comment_style} // "shell";
     $comment_style =~ /\A(cpp|c|shell|html|ini)\z/ or return [
-        400, "Invalid comment_style, please use cpp/c/shell/html/ini"];
+        400, "Invalid comment_style '$comment_style', ".
+            "please use cpp/c/shell/html/ini"];
     my $res                = $label_sub->(id=>$id, label=>$label_str,
                                           comment_style=>$comment_style);
     my $one_line_pattern   = $res->{one_line_pattern};
@@ -205,7 +206,7 @@ sub _doit {
                 attrs   => $parse_attrs->($+{attrs}),
             }];
         } else {
-            return [404, "Fragment with that ID not found"];
+            return [404, "Fragment with ID '$id' not found"];
         }
 
     } elsif ($which eq 'set_attrs') {
@@ -230,7 +231,7 @@ sub _doit {
                       {$sub->(%+)}egx) {
             return [200, "OK", {text=>$text, orig_attrs=>$orig_attrs}];
         } else {
-            return [404, "Fragment with that ID not found"];
+            return [404, "Fragment with ID '$id' not found"];
         }
 
     } elsif ($which eq 'delete') {
@@ -247,7 +248,7 @@ sub _doit {
                                 orig_fragment=>$f{fragment},
                                 orig_payload=>$f{payload}}];
         } else {
-            return [304, "Fragment with that ID already does not exist"];
+            return [304, "Fragment with ID '$id' already does not exist"];
         }
 
     } else { # insert
@@ -274,7 +275,7 @@ sub _doit {
                     text=>$text, orig_fragment=>$f{orig_fragment},
                     orig_payload=>$f{orig_payload}}];
             } else {
-                return [304, "Fragment with that ID already exist with ".
+                return [304, "Fragment with ID '$id' already exist with ".
                             "same content"];
             }
         }

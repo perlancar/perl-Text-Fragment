@@ -640,7 +640,7 @@ sub delete_fragment {
 }
 
 1;
-# ABSTRACT: Manipulate fragments in text
+# ABSTRACT:
 
 =head1 SYNOPSIS
 

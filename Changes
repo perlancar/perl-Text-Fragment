@@ -1,5 +1,13 @@
 Revision history for Text-Fragment
 
+0.09    2016-01-29 (PERLANCAR)
+
+	- Support quoted value in attributes, so we can have values that
+	  contain whitespaces.
+
+	- Bump prereq version Log::Any::IfLOG to 0.07.
+
+
 0.08    2015-09-06 (PERLANCAR)
 
 	- No functional changes.

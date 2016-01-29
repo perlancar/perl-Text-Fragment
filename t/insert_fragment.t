@@ -35,8 +35,8 @@ test_insert_fragment( # failed in 0.01
 test_insert_fragment(
     name          => "insert one-line/shell, set attrs",
     args          => {text=>"1\n2\n3\n", id=>"id1", payload=>"x",
-                      attrs=>{a=>1, b=>2}},
-    text          => "1\n2\n3\nx # FRAGMENT id=id1 a=1 b=2\n",
+                      attrs=>{a=>1, b=>"2 "}},
+    text          => "1\n2\n3\nx # FRAGMENT id=id1 a=1 b=\"2 \"\n",
 );
 test_insert_fragment(
     name          => "insert one-line/shell, no ending newline",

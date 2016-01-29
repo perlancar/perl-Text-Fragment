@@ -24,6 +24,44 @@ our $re_id = qr/\A[A-Za-z0-9_.,:-]+\z/;
 
 our %SPEC;
 
+sub _format_quoted {
+    my $unquoted = shift;
+    my $res = "";
+    my $i = -1;
+    while (++$i < length($unquoted)) {
+        my $c = substr($unquoted, $i, 1);
+        if ($c eq '\\' or $c eq '"') {
+            $res .= "\\$c";
+        } elsif ($c !~ /[\x20-\x7F]/) {
+            # strip non-printables
+        } else {
+            $res .= $c;
+        }
+    }
+    qq("$res");
+}
+
+sub _parse_quoted {
+    my $quoted = shift;
+    $quoted =~ s/\A"//; $quoted =~ s/"\z//;
+    my $res = "";
+    my $i = -1;
+    while (++$i < length($quoted)) {
+        my $c = substr($quoted, $i, 1);
+        if ($c eq '\\') {
+            $res .= substr($quoted, ++$i, 1);
+        } else {
+            $res .= $c;
+        }
+    }
+    $res;
+}
+
+sub _format_attr_value {
+    my $val = shift;
+    $val =~ /\s|"|[^\x20-\x7f]/ ? _format_quoted($val) : $val;
+}
+
 sub _label {
     my %args  = @_;
     my $id            = $args{id} // "";
@@ -31,14 +69,16 @@ sub _label {
     my $comment_style = $args{comment_style};
     my $attrs         = $args{attrs};
 
+    my $quoted_re = qr/"(?:[^\n\r"\\]|\\[^\n\r])*"/;
+
     my $a_re;  # regex to match attributes
     my $ai_re; # also match attributes, but attribute id must be present
     if (length $id) {
-        $ai_re = qr/(?:\w+=\S*[ \t]+)*id=(?<id>\Q$id\E)(?:[ \t]+\w+=\S+)*/;
+        $ai_re = qr/(?:\w+=\S*[ \t]+)*id=(?<id>\Q$id\E)(?:[ \t]+\w+=(?:$quoted_re|\S+))*/;
     } else {
-        $ai_re = qr/(?:\w+=\S*[ \t]+)*id=(?<id>\S*)(?:[ \t]+\w+=\S+)*/;
+        $ai_re = qr/(?:\w+=\S*[ \t]+)*id=(?<id>\S*)(?:[ \t]+\w+=(?:$quoted_re|\S+))*/;
     }
-    $a_re  = qr/(?:\w+=\S*)?(?:[ \t]+\w+=\S*)*/;
+    $a_re  = qr/(?:\w+=\S*)?(?:[ \t]+\w+=(?:$quoted_re|\S+))*/;
 
     my ($ts, $te); # tag start and end
     if ($comment_style eq 'shell') {
@@ -81,9 +121,8 @@ sub _label {
     my $parse_attrs = sub {
         my $s = shift // "";
         my %a;
-        for my $a (split /[ \t]+/, $s) {
-            my ($n, $v) = split /=/, $a, 2;
-            $a{$n} = $v;
+        while ($s =~ /(\w+)=(?:($quoted_re)|(\S+))(?:\s+|\z)/g) {
+            $a{$1} = $2 ? _parse_quoted($2) : $3;
         }
         \%a;
     };
@@ -99,12 +138,13 @@ sub _label {
             my $as = "";
             if (ref($f{attrs})) {
                 for (sort keys %{ $f{attrs} }) {
-                    $as .= " " . "$_=$f{attrs}{$_}";
+                    $as .= " " . "$_="._format_attr_value($f{attrs}{$_});
                 }
             } else {
                 my $a = $parse_attrs->($f{attrs});
-                $as = join("", map {" $_=$a->{$_}"} grep {$_ ne 'id'}
-                    sort keys %$a);
+                $as = join("", map {" $_="._format_attr_value($a->{$_})}
+                               grep {$_ ne 'id'}
+                               sort keys %$a);
             }
 
             my $pl = $f{payload};
@@ -161,8 +201,6 @@ sub _doit {
                 return [400, "Undefined value for attribute name '$_'"];
             }
         }
-        $attrs->{$_} =~ /\s/s and return
-            [400,"Invalid value in attribute '$_', no whitespaces please"];
     }
 
     my $good_pattern       = $args{good_pattern};

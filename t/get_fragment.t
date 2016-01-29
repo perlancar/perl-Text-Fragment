@@ -27,7 +27,7 @@ subtest "get" => sub {
 1
 2
 3
-4 # FRAGMENT id=id1 a=1 b=2
+4 # FRAGMENT id=id1 a=1 b="2 "
 # BEGIN FRAGMENT id=id2
 a
 b
@@ -42,9 +42,9 @@ _
     is_deeply(
         get_fragment(text=>$text, id=>"id1"),
         [200, "OK", {
-            raw     => "4 # FRAGMENT id=id1 a=1 b=2\n",
+            raw     => "4 # FRAGMENT id=id1 a=1 b=\"2 \"\n",
             id      => "id1",
-            attrs   => {id=>"id1", a=>1, b=>2},
+            attrs   => {id=>"id1", a=>1, b=>"2 "},
             payload => "4",
         }]
     );

@@ -14,11 +14,6 @@ subtest "invalid attr name" => sub {
     is($res->[0], 400, "status");
 };
 
-subtest "invalid attr value" => sub {
-    my $res = set_fragment_attrs(text=>"", id=>"id1", attrs=>{x=>" "});
-    is($res->[0], 400, "status");
-};
-
 subtest "not found" => sub {
     my $text = <<'_';
 1
@@ -51,13 +46,13 @@ _
 
     is_deeply(
         set_fragment_attrs(text=>$text, id=>"id1",
-                           attrs=>{a=>10, b=>undef, c=>3}),
+                           attrs=>{a=>10, b=>undef, c=>"3 "}),
         [200, "OK", {
             text => <<'_',
 1
 2
 3
-4 # FRAGMENT id=id1 a=10 c=3
+4 # FRAGMENT id=id1 a=10 c="3 "
 # BEGIN FRAGMENT id=id2
 a
 b
@@ -87,14 +82,14 @@ _
 
     is_deeply(
         set_fragment_attrs(text=>$text, id=>"id2",
-                           attrs=>{a=>10, b=>undef, c=>3}),
+                           attrs=>{a=>10, b=>undef, c=>"3 "}),
         [200, "OK", {
             text => <<'_',
 1
 2
 3
 4 # FRAGMENT id=id1
-# BEGIN FRAGMENT id=id2 a=10 c=3
+# BEGIN FRAGMENT id=id2 a=10 c="3 "
 a
 b
 # END FRAGMENT id=id2

@@ -1,3 +1,10 @@
+0.10    2017-07-10 (PERLANCAR)
+
+	- No functional changes.
+
+	- Replace Log::Any with Log::ger.
+
+
 0.09    2016-01-29 (PERLANCAR)
 
 	- Support quoted value in attributes, so we can have values that

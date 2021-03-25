@@ -1,6 +1,8 @@
 package Text::Fragment;
 
+# AUTHORITY
 # DATE
+# DIST
 # VERSION
 
 use 5.010001;
@@ -732,6 +734,6 @@ To get a fragment:
 
 To set fragment attributes:
 
- $res = se_fragment_attrs(text=>$text, id=>'bar', attrs=>{name=>'val', ...});
+ $res = set_fragment_attrs(text=>$text, id=>'bar', attrs=>{name=>'val', ...});
 
 =cut

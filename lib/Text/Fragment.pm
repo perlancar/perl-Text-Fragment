@@ -724,9 +724,9 @@ To delete a fragment:
 
  $res = delete_fragment(text=>$res->[2], id=>'bar');
 
-To list fragments:
+To list fragments contained in a text:
 
- $res = list_fragment(text=>$text);
+ $res = list_fragments(text=>$text);
 
 To get a fragment:
 

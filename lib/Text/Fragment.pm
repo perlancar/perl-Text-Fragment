@@ -735,4 +735,36 @@ To set fragment attributes:
 
  $res = set_fragment_attrs(text=>$text, id=>'bar', attrs=>{name=>'val', ...});
 
+
+=head1 FAQ
+
+=head2 Why is my fragment not found/listed?
+
+ foo=1 # FRAGMENT seq=1
+
+ # BEGIN FRAGMENT name=foo
+ blah
+ blah blah
+ # END FRAGMENT name=foo
+
+You forgot to add the `id` attribute. It is required.
+
+=head2 What if I need to have whitespace in my attribute name?
+
+You can't. Attribute names need to be alphanums only.
+
+=head2 What if I need to have whitespace in my attribute value?
+
+You can encode, e.g. with URI encoding:
+
+ foo=1 # FRAGMENT id=1 comment=very%20simple
+
+=head2 What if I forgot to properly close a multi-line fragment?
+
+ # BEGIN FRAGMENT id=1
+ blah
+
+Currently L</list_fragments> or L</get_fragment> will not find your fragment
+without emitting warning/error message.
+
 =cut

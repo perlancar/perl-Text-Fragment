@@ -346,7 +346,7 @@ sub _doit {
 $SPEC{':package'} = {
     v => 1.1,
     summary     => 'Manipulate fragments in text',
-    description => <<'_',
+    description => <<'MARKDOWN',
 
 A fragment is a single line or a group of lines (called payload) with a metadata
 encoded in the comment that is put adjacent to it (for a single line fragment)
@@ -401,7 +401,7 @@ Another example (using `ini`-style comment):
     allow_url_fopen=0
     ; END FRAGMENT
 
-_
+MARKDOWN
 };
 
 my $arg_comment_style = {
@@ -444,14 +444,14 @@ $SPEC{list_fragments} = {
     result => {
         summary => 'List of fragments',
         schema  => 'array*',
-        description => <<'_',
+        description => <<'MARKDOWN',
 
 Will return status 200 if operation is successful. Result will be an array of
 fragments, where each fragment is a hash containing these keys: `raw` (string),
 `payload` (string), `attrs` (hash), `id` (string, can also be found in
 attributes).
 
-_
+MARKDOWN
     },
 };
 sub list_fragments {
@@ -461,11 +461,11 @@ sub list_fragments {
 $SPEC{get_fragment} = {
     v => 1.1,
     summary => 'Get fragment with a certain ID in text',
-    description => <<'_',
+    description => <<'MARKDOWN',
 
 If there are multiple occurences of the fragment with the same ID ,
 
-_
+MARKDOWN
     args => {
         text          => {
             summary => 'The text which contain fragments',
@@ -480,7 +480,7 @@ _
     result => {
         summary => 'Fragment',
         schema  => 'array*',
-        description => <<'_',
+        description => <<'MARKDOWN',
 
 Will return status 200 if fragment is found. Result will be a hash with the
 following keys: `raw` (string), `payload` (string), `attrs` (hash), `id`
@@ -488,7 +488,7 @@ following keys: `raw` (string), `payload` (string), `attrs` (hash), `id`
 
 Return 404 if fragment is not found.
 
-_
+MARKDOWN
     },
 };
 sub get_fragment {
@@ -498,11 +498,11 @@ sub get_fragment {
 $SPEC{set_fragment_attrs} = {
     v => 1.1,
     summary => 'Set/unset attributes of a fragment',
-    description => <<'_',
+    description => <<'MARKDOWN',
 
 If there are multiple occurences of the fragment with the same ID ,
 
-_
+MARKDOWN
     args => {
         text          => {
             summary => 'The text which contain fragments',
@@ -515,18 +515,18 @@ _
         id            => $arg_id,
         attrs         => {
             schema => 'hash*',
-            description => <<'_',
+            description => <<'MARKDOWN',
 
 To delete an attribute in the fragment, you can set the value to undef.
 
-_
+MARKDOWN
             req    => 1,
         },
     },
     result => {
         summary => 'New text and other data',
         schema  => 'array*',
-        description => <<'_',
+        description => <<'MARKDOWN',
 
 Will return status 200 if fragment is found. Result will be a hash containing
 these keys: `text` (string, the modified text), `orig_attrs` (hash, the old
@@ -534,7 +534,7 @@ attributes before being modified).
 
 Return 404 if fragment is not found.
 
-_
+MARKDOWN
     },
 };
 sub set_fragment_attrs {
@@ -544,14 +544,14 @@ sub set_fragment_attrs {
 $SPEC{insert_fragment} = {
     v => 1.1,
     summary => 'Insert or replace a fragment in text',
-    description => <<'_',
+    description => <<'MARKDOWN',
 
 Newline insertion behaviour: if fragment is inserted at the bottom and text does
 not end with newline (which is considered bad style), the inserted fragment will
 also not end with newline. Except when original text is an empty string, in
 which case an ending newline will still be added.
 
-_
+MARKDOWN
     args => {
         text      => {
             summary => 'The text to insert fragment into',
@@ -565,7 +565,7 @@ _
             summary => 'Whether to append fragment at beginning of file '.
                 'instead of at the end',
             schema  => [bool => { default=>0 }],
-            description => <<'_',
+            description => <<'MARKDOWN',
 
 Default is false, which means to append at the end of file.
 
@@ -573,20 +573,20 @@ Note that this only has effect if `replace_pattern` is not defined or replace
 pattern is not found in file. Otherwise, fragment will be inserted to replace
 the pattern.
 
-_
+MARKDOWN
         },
         replace_pattern => {
             summary => 'Regex pattern which if found will be used for '.
                 'placement of fragment',
             schema  => 'str',
-            description => <<'_',
+            description => <<'MARKDOWN',
 
 If fragment needs to be inserted into file, then if `replace_pattern` is defined
 then it will be searched. If found, fragment will be placed to replace the
 pattern. Otherwise, fragment will be inserted at the end (or beginning, see
 `top_style`) of file.
 
-_
+MARKDOWN
         },
         good_pattern => {
             summary => 'Regex pattern which if found means fragment '.
@@ -602,7 +602,7 @@ _
     result => {
         summary => 'A hash of result',
         schema  => 'hash*',
-        description => <<'_',
+        description => <<'MARKDOWN',
 
 Will return status 200 if operation is successful and text is changed. The
 result is a hash with the following keys: `text` will contain the new text,
@@ -614,7 +614,7 @@ result is a hash with the following keys: `text` will contain the new text,
 Will return status 304 if nothing is changed (i.e. if fragment with the
 same payload that needs to be inserted already exists in the text).
 
-_
+MARKDOWN
     },
 };
 sub insert_fragment {
@@ -624,7 +624,7 @@ sub insert_fragment {
 $SPEC{delete_fragment} = {
     v => 1.1,
     summary => 'Delete fragment in text',
-    description => <<'_',
+    description => <<'MARKDOWN',
 
 If there are multiple occurences of fragment (which is considered an abnormal
 condition), all occurences will be deleted.
@@ -633,7 +633,7 @@ Newline deletion behaviour: if fragment at the bottom of text does not end with
 newline (which is considered bad style), the text after the fragment is deleted
 will also not end with newline.
 
-_
+MARKDOWN
     args => {
         text => {
             summary => 'The text to delete fragment from',
@@ -659,7 +659,7 @@ _
     result => {
         summary => 'A hash of result',
         schema  => 'hash*',
-        description => <<'_',
+        description => <<'MARKDOWN',
 
 Will return status 200 if operation is successful and text is deleted. The
 result is a hash with the following keys: `text` will contain the new text,
@@ -671,7 +671,7 @@ fragment will be returned in `orig_payload` and `orig_fragment`.
 Will return status 304 if nothing is changed (i.e. when the fragment that needs
 to be deleted already does not exist in the text).
 
-_
+MARKDOWN
     },
 };
 sub delete_fragment {
